@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:video_player/video_player.dart';
 import 'dart:io';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 void main() => runApp(MyApp());
 
@@ -44,9 +46,26 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
-  void _uploadVideo() {
+  void _uploadVideo() async{
     // 上传视频的处理逻辑
     print('Upload Video');
+    if(_video != null){
+      List<int> videoBytes = await _video!.readAsBytes();
+      String fileName = _video!.path.split('/').last;
+
+      var request = http.MultipartRequest('POST', Uri.parse('http://192.168.1.24:80/upload'));
+      request.files.add(http.MultipartFile.fromBytes('file', videoBytes, filename: fileName));
+
+      var response = await request.send();
+
+      if (response.statusCode == 200) {
+        print('视频上传成功');
+      } else {
+        print('视频上传失败');
+      }
+    } else {
+      print('未选择视频');
+    }
   }
 
   @override
