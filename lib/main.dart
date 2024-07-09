@@ -142,36 +142,42 @@ class _MyHomePageState extends State<MyHomePage> {
                       )),
                 ],
               ),
-              const SizedBox(height: 60),
+              const SizedBox(height: 30),
               Row(
                 children: [
-                  Center(
-                    child: _video != null
-                        ? Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const SizedBox(height: 20),
-                              Container(
-                                width: 300,
-                                child: _controller != null &&
-                                        _controller!.value.isInitialized
-                                    ? AspectRatio(
-                                        aspectRatio:
-                                            _controller!.value.aspectRatio,
-                                        child: VideoPlayer(_controller!),
-                                      )
-                                    : const Center(
-                                        child: CircularProgressIndicator()),
-                              )
-                            ],
-                          )
-                        : const Text(
-                            'No video selected',
-                            style: TextStyle(
-                                fontFamily: 'Times New Roman',
-                                fontSize: 18,
-                                color: Colors.black),
-                          ),
+                  Expanded(
+                    child: Center(
+                      child: _video != null
+                          ? Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const SizedBox(height: 20),
+                                Container(
+                                  alignment: Alignment.center,
+                                  width: 300,
+                                  child: _controller != null &&
+                                          _controller!.value.isInitialized
+                                      ? AspectRatio(
+                                          aspectRatio:
+                                              _controller!.value.aspectRatio,
+                                          child: VideoPlayer(_controller!),
+                                        )
+                                      : const Center(
+                                          child: CircularProgressIndicator(),
+                                        ),
+                                )
+                              ],
+                            )
+                          : const Center(
+                              child: Text(
+                              'No video selected',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                  fontFamily: 'Times New Roman',
+                                  fontSize: 18,
+                                  color: Colors.black),
+                            )),
+                    ),
                   ),
                 ],
               )
