@@ -1,9 +1,12 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:video_player/video_player.dart';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 void main() => runApp(MyApp());
 
@@ -28,6 +31,14 @@ class _MyHomePageState extends State<MyHomePage> {
   File? _video;
   VideoPlayerController? _controller;
   final ImagePicker _picker = ImagePicker();
+  bool _isVideoUploaded = false; // 用来跟踪视频是否上传
+  String _resultText = "";
+  bool _redoVisible = false;
+  bool _googleMapVisible = false;
+  final List<Marker> _markers = [];
+  GoogleMapController? _mapController;
+  String videoId = ""; // 根据实际情况设置videoId
+  List<Map<String, dynamic>> _tableData = [];
 
   // 实现 _selectVideo 方法
   void _selectVideo() async {
@@ -46,26 +57,144 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
-  void _uploadVideo() async{
+  void _uploadVideo() async {
     // 上传视频的处理逻辑
     print('Upload Video');
-    if(_video != null){
+    if (_video != null) {
       List<int> videoBytes = await _video!.readAsBytes();
       String fileName = _video!.path.split('/').last;
 
-      var request = http.MultipartRequest('POST', Uri.parse('http://192.168.1.24:80/upload'));
-      request.files.add(http.MultipartFile.fromBytes('file', videoBytes, filename: fileName));
+      var request = http.MultipartRequest(
+          'POST', Uri.parse('http://192.168.1.24:80/upload'));
+      request.files.add(
+          http.MultipartFile.fromBytes('file', videoBytes, filename: fileName));
 
       var response = await request.send();
-
+      // Parse the streamed response to get the complete response body
+      final responseBody = await http.Response.fromStream(response);
       if (response.statusCode == 200) {
-        print('视频上传成功');
+        print('Video uploaded successfully');
+        // Assuming the response body is plain text
+        setState(() {
+          videoId = responseBody.body;
+          _isVideoUploaded = true; // 设置视频已上传的标志
+        });
       } else {
-        print('视频上传失败');
+        print('Video upload failed');
+        setState(() {
+          _isVideoUploaded = false;
+        });
       }
     } else {
-      print('未选择视频');
+      print('No video selected');
+      setState(() {
+        _isVideoUploaded = false;
+      });
     }
+  }
+
+  void _findLocation() async {
+    if (!_isVideoUploaded) {
+      _showDialog();
+      return;
+    }
+
+    setState(() {
+      _resultText = "";
+      _redoVisible = false;
+      _googleMapVisible = false;
+    });
+
+    try {
+      final response =
+          await http.get(Uri.parse('http://192.168.1.24:80/result/$videoId'));
+      if (response.statusCode == 200) {
+        final result = json.decode(response.body);
+
+        setState(() {
+          _googleMapVisible = true;
+          _markers.clear();
+          int count = 0;
+          List<Map<String, dynamic>> legend = [];
+
+          result.forEach((key, value) {
+            count++;
+            final pos = LatLng(value[0], value[1]);
+            _markers.add(Marker(
+              markerId: MarkerId(count.toString()),
+              position: pos,
+              infoWindow: InfoWindow(title: count.toString(), snippet: key),
+            ));
+            legend.add({'mark': count, 'location': key});
+          });
+
+          if (legend.isEmpty) {
+            _resultText =
+                "Sorry, could not find any valid locations, maybe try another frame rate.";
+            _redoVisible = true;
+          } else {
+            _tableData = legend; // 更新表格数据
+          }
+        });
+      } else {
+        setState(() {
+          _resultText = "Failed to get result from server.";
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _resultText = "An error occurred: $e";
+      });
+    }
+  }
+
+  void _showDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Prompt'),
+          content: Text('Please upload the video first'),
+          actions: <Widget>[
+            TextButton(
+              child: Text('Confirm'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildTable() {
+    return Table(
+      border: TableBorder.all(),
+      children: [
+        TableRow(
+          children: [
+            TableCell(child: Center(child: Text('Mark'))),
+            TableCell(child: Center(child: Text('Location'))),
+          ],
+        ),
+        ..._tableData
+            .map(
+              (data) => TableRow(
+                children: [
+                  TableCell(
+                      child: Center(child: Text(data['mark'].toString()))),
+                  TableCell(child: Center(child: Text(data['location']))),
+                ],
+              ),
+            )
+            .toList(),
+      ],
+    );
+  }
+
+  void _reDo() {
+    _findLocation();
   }
 
   @override
@@ -101,7 +230,8 @@ class _MyHomePageState extends State<MyHomePage> {
       ),
       body: Padding(
           padding: const EdgeInsets.all(30),
-          child: Column(
+          child: SingleChildScrollView(
+              child: Column(
             children: [
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -184,7 +314,85 @@ class _MyHomePageState extends State<MyHomePage> {
                                       : const Center(
                                           child: CircularProgressIndicator(),
                                         ),
-                                )
+                                ),
+                                const SizedBox(
+                                  height: 40,
+                                ),
+                                Container(
+                                    decoration: BoxDecoration(
+                                      gradient: const LinearGradient(
+                                        colors: [Colors.blue, Colors.purple],
+                                      ),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: SizedBox(
+                                      width: 160,
+                                      child: ElevatedButton(
+                                          onPressed: _findLocation,
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: Colors.transparent,
+                                            shadowColor: Colors.transparent,
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                            ),
+                                          ),
+                                          child: const Text(
+                                            'findLocation',
+                                            style: TextStyle(
+                                                fontFamily: 'Times New Roman',
+                                                fontSize: 18,
+                                                color: Colors.white),
+                                          )),
+                                    )),
+                                if (_googleMapVisible)
+                                  Column(
+                                    children: [
+                                      SizedBox(
+                                        height: 40,
+                                        child: GoogleMap(
+                                          onMapCreated: (controller) {
+                                            _mapController = controller;
+                                          },
+                                          initialCameraPosition:
+                                              const CameraPosition(
+                                            target:
+                                                LatLng(51.508742, -0.120850),
+                                            zoom: 5,
+                                          ),
+                                          markers: Set<Marker>.of(_markers),
+                                        ),
+                                      ),
+                                      const SizedBox(
+                                        height: 20,
+                                      ),
+                                      _buildTable(), // 调用 _buildTable 方法来显示表格
+                                      Text(_resultText),
+                                      if (_redoVisible)
+                                        ElevatedButton(
+                                            onPressed: _reDo,
+                                          child: SizedBox(
+                                            width: 160,
+                                            child: ElevatedButton(
+                                                onPressed: _uploadVideo,
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor: Colors.transparent,
+                                                  shadowColor: Colors.transparent,
+                                                  shape: RoundedRectangleBorder(
+                                                    borderRadius: BorderRadius.circular(10),
+                                                  ),
+                                                ),
+                                                child: const Text(
+                                                  'Redo',
+                                                  style: TextStyle(
+                                                      fontFamily: 'Times New Roman',
+                                                      fontSize: 18,
+                                                      color: Colors.white),
+                                                )),
+                                          )
+                                        ),
+                                    ],
+                                  ),
                               ],
                             )
                           : const Center(
@@ -201,7 +409,7 @@ class _MyHomePageState extends State<MyHomePage> {
                 ],
               )
             ],
-          )),
+          ))),
     );
   }
 }
