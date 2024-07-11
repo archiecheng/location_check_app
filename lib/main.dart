@@ -39,6 +39,7 @@ class _MyHomePageState extends State<MyHomePage> {
   GoogleMapController? _mapController;
   String videoId = ""; // 根据实际情况设置videoId
   List<Map<String, dynamic>> _tableData = [];
+  bool _isLoading = false; // 上传加载状态
 
   // 实现 _selectVideo 方法
   void _selectVideo() async {
@@ -58,6 +59,9 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   void _uploadVideo() async {
+    setState(() {
+      _isLoading = true; // 开始加载
+    });
     // 上传视频的处理逻辑
     print('Upload Video');
     if (_video != null) {
@@ -72,23 +76,28 @@ class _MyHomePageState extends State<MyHomePage> {
       var response = await request.send();
       // Parse the streamed response to get the complete response body
       final responseBody = await http.Response.fromStream(response);
+
       if (response.statusCode == 200) {
+        _showUploadSuccessDialog();
         print('Video uploaded successfully');
         // Assuming the response body is plain text
         setState(() {
           videoId = responseBody.body;
           _isVideoUploaded = true; // 设置视频已上传的标志
+          _isLoading = false; // 加载结束
         });
       } else {
         print('Video upload failed');
         setState(() {
           _isVideoUploaded = false;
+          _isLoading = false; // 加载结束
         });
       }
     } else {
       print('No video selected');
       setState(() {
         _isVideoUploaded = false;
+        _isLoading = false; // 加载结束
       });
     }
   }
@@ -100,6 +109,7 @@ class _MyHomePageState extends State<MyHomePage> {
     }
 
     setState(() {
+      _isLoading = true; // 开始加载
       _resultText = "";
       _redoVisible = false;
       _googleMapVisible = false;
@@ -135,15 +145,18 @@ class _MyHomePageState extends State<MyHomePage> {
           } else {
             _tableData = legend; // 更新表格数据
           }
+          _isLoading = false; // 加载结束
         });
       } else {
         setState(() {
           _resultText = "Failed to get result from server.";
+          _isLoading = false; // 加载结束
         });
       }
     } catch (e) {
       setState(() {
         _resultText = "An error occurred: $e";
+        _isLoading = false; // 加载结束
       });
     }
   }
@@ -155,6 +168,26 @@ class _MyHomePageState extends State<MyHomePage> {
         return AlertDialog(
           title: Text('Prompt'),
           content: Text('Please upload the video first'),
+          actions: <Widget>[
+            TextButton(
+              child: Text('Confirm'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showUploadSuccessDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Prompt'),
+          content: Text('Upload success!'),
           actions: <Widget>[
             TextButton(
               child: Text('Confirm'),
@@ -292,122 +325,155 @@ class _MyHomePageState extends State<MyHomePage> {
                 ],
               ),
               const SizedBox(height: 30),
-              Row(
-                children: [
-                  Expanded(
-                    child: Center(
-                      child: _video != null
-                          ? Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const SizedBox(height: 20),
-                                Container(
-                                  alignment: Alignment.center,
-                                  width: 300,
-                                  child: _controller != null &&
-                                          _controller!.value.isInitialized
-                                      ? AspectRatio(
-                                          aspectRatio:
-                                              _controller!.value.aspectRatio,
-                                          child: VideoPlayer(_controller!),
-                                        )
-                                      : const Center(
-                                          child: CircularProgressIndicator(),
-                                        ),
-                                ),
-                                const SizedBox(
-                                  height: 40,
-                                ),
-                                Container(
-                                    decoration: BoxDecoration(
-                                      gradient: const LinearGradient(
-                                        colors: [Colors.blue, Colors.purple],
-                                      ),
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    child: SizedBox(
-                                      width: 160,
-                                      child: ElevatedButton(
-                                          onPressed: _findLocation,
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor: Colors.transparent,
-                                            shadowColor: Colors.transparent,
-                                            shape: RoundedRectangleBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(10),
-                                            ),
-                                          ),
-                                          child: const Text(
-                                            'findLocation',
-                                            style: TextStyle(
-                                                fontFamily: 'Times New Roman',
-                                                fontSize: 18,
-                                                color: Colors.white),
-                                          )),
-                                    )),
-                                if (_googleMapVisible)
-                                  Column(
+              _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : Row(
+                      children: [
+                        Expanded(
+                          child: Center(
+                            child: _video != null
+                                ? Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      SizedBox(
-                                        height: 40,
-                                        child: GoogleMap(
-                                          onMapCreated: (controller) {
-                                            _mapController = controller;
-                                          },
-                                          initialCameraPosition:
-                                              const CameraPosition(
-                                            target:
-                                                LatLng(51.508742, -0.120850),
-                                            zoom: 5,
-                                          ),
-                                          markers: Set<Marker>.of(_markers),
-                                        ),
+                                      const SizedBox(height: 20),
+                                      Container(
+                                        alignment: Alignment.center,
+                                        width: 300,
+                                        child: _controller != null &&
+                                                _controller!.value.isInitialized
+                                            ? AspectRatio(
+                                                aspectRatio: _controller!
+                                                    .value.aspectRatio,
+                                                child:
+                                                    VideoPlayer(_controller!),
+                                              )
+                                            : const Center(
+                                                child:
+                                                    CircularProgressIndicator(),
+                                              ),
                                       ),
                                       const SizedBox(
-                                        height: 20,
+                                        height: 40,
                                       ),
-                                      _buildTable(), // 调用 _buildTable 方法来显示表格
-                                      Text(_resultText),
-                                      if (_redoVisible)
-                                        ElevatedButton(
-                                            onPressed: _reDo,
+                                      Container(
+                                          decoration: BoxDecoration(
+                                            gradient: const LinearGradient(
+                                              colors: [
+                                                Colors.blue,
+                                                Colors.purple
+                                              ],
+                                            ),
+                                            borderRadius:
+                                                BorderRadius.circular(10),
+                                          ),
                                           child: SizedBox(
                                             width: 160,
                                             child: ElevatedButton(
-                                                onPressed: _uploadVideo,
+                                                onPressed: _findLocation,
                                                 style: ElevatedButton.styleFrom(
-                                                  backgroundColor: Colors.transparent,
-                                                  shadowColor: Colors.transparent,
+                                                  backgroundColor:
+                                                      Colors.transparent,
+                                                  shadowColor:
+                                                      Colors.transparent,
                                                   shape: RoundedRectangleBorder(
-                                                    borderRadius: BorderRadius.circular(10),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            10),
                                                   ),
                                                 ),
                                                 child: const Text(
-                                                  'Redo',
+                                                  'findLocation',
                                                   style: TextStyle(
-                                                      fontFamily: 'Times New Roman',
+                                                      fontFamily:
+                                                          'Times New Roman',
                                                       fontSize: 18,
                                                       color: Colors.white),
                                                 )),
-                                          )
+                                          )),
+                                      if (_googleMapVisible)
+                                        Column(
+                                          children: [
+                                            SizedBox(
+                                              height: 40,
+                                              child: GoogleMap(
+                                                onMapCreated: (controller) {
+                                                  _mapController = controller;
+                                                },
+                                                initialCameraPosition:
+                                                    const CameraPosition(
+                                                  target: LatLng(
+                                                      51.508742, -0.120850),
+                                                  zoom: 5,
+                                                ),
+                                                markers:
+                                                    Set<Marker>.of(_markers),
+                                              ),
+                                            ),
+                                            const SizedBox(
+                                              height: 20,
+                                            ),
+                                            _buildTable(), // 调用 _buildTable 方法来显示表格
+                                            Text(_resultText),
+                                            if (_redoVisible)
+                                              Container(
+                                                  decoration: BoxDecoration(
+                                                    gradient:
+                                                        const LinearGradient(
+                                                      colors: [
+                                                        Colors.blue,
+                                                        Colors.purple
+                                                      ],
+                                                    ),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            10),
+                                                  ),
+                                                  child: SizedBox(
+                                                    width: 160,
+                                                    child: ElevatedButton(
+                                                        onPressed: _reDo,
+                                                        style: ElevatedButton
+                                                            .styleFrom(
+                                                          backgroundColor:
+                                                              Colors
+                                                                  .transparent,
+                                                          shadowColor: Colors
+                                                              .transparent,
+                                                          shape:
+                                                              RoundedRectangleBorder(
+                                                            borderRadius:
+                                                                BorderRadius
+                                                                    .circular(
+                                                                        10),
+                                                          ),
+                                                        ),
+                                                        child: const Text(
+                                                          'reDo',
+                                                          style: TextStyle(
+                                                              fontFamily:
+                                                                  'Times New Roman',
+                                                              fontSize: 18,
+                                                              color:
+                                                                  Colors.white),
+                                                        )),
+                                                  ))
+                                          ],
                                         ),
                                     ],
-                                  ),
-                              ],
-                            )
-                          : const Center(
-                              child: Text(
-                              'No video selected',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                  fontFamily: 'Times New Roman',
-                                  fontSize: 18,
-                                  color: Colors.black),
-                            )),
-                    ),
-                  ),
-                ],
-              )
+                                  )
+                                : const Center(
+                                    child: Text(
+                                    'No video selected',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                        fontFamily: 'Times New Roman',
+                                        fontSize: 18,
+                                        color: Colors.black),
+                                  )),
+                          ),
+                        ),
+                      ],
+                    )
             ],
           ))),
     );
