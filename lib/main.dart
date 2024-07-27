@@ -69,7 +69,7 @@ class _MyHomePageState extends State<MyHomePage> {
       String fileName = _video!.path.split('/').last;
 
       var request = http.MultipartRequest(
-          'POST', Uri.parse('http://192.168.1.24:80/upload'));
+          'POST', Uri.parse('https://www.videolocationfinder.com/upload'));
       request.files.add(
           http.MultipartFile.fromBytes('file', videoBytes, filename: fileName));
 
@@ -116,8 +116,7 @@ class _MyHomePageState extends State<MyHomePage> {
     });
 
     try {
-      final response =
-          await http.get(Uri.parse('http://192.168.1.24:80/result/$videoId'));
+      final response = await http.get(Uri.parse('https://www.videolocationfinder.com/result/$videoId'));
       if (response.statusCode == 200) {
         final result = json.decode(response.body);
 
@@ -129,18 +128,25 @@ class _MyHomePageState extends State<MyHomePage> {
 
           result.forEach((key, value) {
             count++;
-            final pos = LatLng(value[0], value[1]);
-            _markers.add(Marker(
-              markerId: MarkerId(count.toString()),
-              position: pos,
-              infoWindow: InfoWindow(title: count.toString(), snippet: key),
-            ));
-            legend.add({'mark': count, 'location': key});
+            // 检查并转换为 double
+            double lat = double.tryParse(value[0].toString()) ?? 0.0;
+            double lng = double.tryParse(value[1].toString()) ?? 0.0;
+
+            if (lat != 0.0 && lng != 0.0) {
+              final pos = LatLng(lat, lng);
+              _markers.add(Marker(
+                markerId: MarkerId(count.toString()),
+                position: pos,
+                infoWindow: InfoWindow(title: count.toString(), snippet: key),
+              ));
+              legend.add({'mark': count, 'location': key});
+            } else {
+              print("Invalid latitude or longitude: $lat, $lng");
+            }
           });
 
           if (legend.isEmpty) {
-            _resultText =
-                "Sorry, could not find any valid locations, maybe try another frame rate.";
+            _resultText = "Sorry, could not find any valid locations, maybe try another frame rate.";
             _redoVisible = true;
           } else {
             _tableData = legend; // 更新表格数据
@@ -149,15 +155,17 @@ class _MyHomePageState extends State<MyHomePage> {
         });
       } else {
         setState(() {
-          _resultText = "Failed to get result from server.";
+          _resultText = "Failed to get result from server. Status code: ${response.statusCode}";
           _isLoading = false; // 加载结束
         });
+        print('Server response: ${response.body}');
       }
     } catch (e) {
       setState(() {
         _resultText = "An error occurred: $e";
         _isLoading = false; // 加载结束
       });
+      print('Error: $e');
     }
   }
 
